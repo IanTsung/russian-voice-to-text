@@ -16,7 +16,7 @@ This tool converts Russian speech to text using Google's Speech Recognition API.
 - Python 3.6 or higher
 - PyAudio
 - SpeechRecognition
-- pydub (for OGG to WAV conversion)
+- ffmpeg-python (for OGG to WAV conversion)
 
 ## Installation
 
