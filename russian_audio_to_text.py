@@ -3,7 +3,6 @@ import os
 import wave
 import contextlib
 import time
-import tempfile
 import shutil
 from pydub import AudioSegment
 from pydub.silence import split_on_silence
@@ -31,8 +30,11 @@ def split_audio_file(file_path, chunk_length_ms=120000, silence_thresh=-40):
         print("Splitting audio file into chunks...")
         audio = AudioSegment.from_file(file_path)
         
-        # Create temp directory
-        temp_dir = tempfile.mkdtemp(prefix="audio_chunks_")
+        # Create temp directory in current working directory
+        temp_dir = os.path.join(os.getcwd(), "temp_chunks")
+        if os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir)  # Clean up any existing temp directory
+        os.makedirs(temp_dir)
         print(f"Created temporary directory: {temp_dir}")
         
         # Split on silence with longer minimum silence length
