@@ -24,12 +24,12 @@ def check_ffmpeg():
         return False
     return True
 
-def convert_ogg_to_wav(input_file, output_dir="audio_files"):
+def convert_to_wav(input_file, output_dir="audio_files"):
     """
-    Convert an OGG file to WAV format and save it in the specified output directory.
+    Convert an audio file (OGG or M4A) to WAV format and save it in the specified output directory.
     
     Args:
-        input_file (str): Path to the input OGG file
+        input_file (str): Path to the input audio file
         output_dir (str): Directory to save the converted WAV file
     """
     try:
@@ -62,7 +62,7 @@ def convert_ogg_to_wav(input_file, output_dir="audio_files"):
         output_file = os.path.join(output_dir, f"{filename}.wav")
         print(f"Output file path: {output_file}")
         
-        # Convert OGG to WAV using ffmpeg
+        # Convert to WAV using ffmpeg
         print(f"\nStarting FFmpeg conversion...")
         print(f"Input file: {input_file}")
         print(f"Output file: {output_file}")
@@ -91,37 +91,37 @@ def convert_ogg_to_wav(input_file, output_dir="audio_files"):
         print("\nFull traceback:")
         traceback.print_exc()
 
-def list_ogg_files():
-    """List all OGG files in the current directory and subdirectories."""
+def list_audio_files():
+    """List all OGG and M4A files in the current directory and subdirectories."""
     print("\nDebug: Starting file search...")
-    ogg_files = []
+    audio_files = []
     for root, dirs, files in os.walk("."):
         print(f"Searching in directory: {root}")
         for file in files:
-            if file.lower().endswith('.ogg'):
+            if file.lower().endswith(('.ogg', '.m4a')):
                 # Convert to absolute path
                 full_path = os.path.abspath(os.path.join(root, file))
-                print(f"Found OGG file: {full_path}")
-                ogg_files.append(full_path)
+                print(f"Found audio file: {full_path}")
+                audio_files.append(full_path)
     
-    if not ogg_files:
-        print("No OGG files found in the current directory or subdirectories.")
+    if not audio_files:
+        print("No OGG or M4A files found in the current directory or subdirectories.")
         return None
     
-    print("\nAvailable OGG files:")
-    for i, file in enumerate(ogg_files, 1):
+    print("\nAvailable audio files:")
+    for i, file in enumerate(audio_files, 1):
         print(f"{i}. {file}")
     
     while True:
         try:
             choice = int(input("\nSelect a file number (or 0 to enter custom path): "))
             if choice == 0:
-                custom_path = input("Enter the path to your OGG file: ")
+                custom_path = input("Enter the path to your audio file: ")
                 abs_path = os.path.abspath(custom_path)
                 print(f"Custom path resolved to: {abs_path}")
                 return abs_path
-            if 1 <= choice <= len(ogg_files):
-                selected_file = ogg_files[choice - 1]
+            if 1 <= choice <= len(audio_files):
+                selected_file = audio_files[choice - 1]
                 print(f"Selected file: {selected_file}")
                 return selected_file
             print("Invalid selection. Please try again.")
@@ -129,12 +129,12 @@ def list_ogg_files():
             print("Please enter a valid number.")
 
 if __name__ == "__main__":
-    print("OGG to WAV Converter")
-    print("This tool converts OGG audio files to WAV format.")
+    print("Audio to WAV Converter")
+    print("This tool converts OGG and M4A audio files to WAV format.")
     print("Converted files will be saved in the 'audio_files' directory.")
     
-    input_file = list_ogg_files()
+    input_file = list_audio_files()
     if input_file and os.path.exists(input_file):
-        convert_ogg_to_wav(input_file)
+        convert_to_wav(input_file)
     else:
         print("File not found!") 
