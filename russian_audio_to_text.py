@@ -3,7 +3,10 @@ import os
 import wave
 import contextlib
 import time
+import tempfile
+import shutil
 from pydub import AudioSegment
+from pydub.silence import split_on_silence
 
 def get_audio_duration(file_path):
     """Get the duration of an audio file in seconds."""
@@ -20,6 +23,66 @@ def get_audio_duration(file_path):
             return len(audio) / 1000.0  # Convert milliseconds to seconds
     except Exception as e:
         print(f"Warning: Could not determine audio duration: {e}")
+        return None
+
+def split_audio_file(file_path, chunk_length_ms=120000, silence_thresh=-40):
+    """Split audio file into chunks based on silence."""
+    try:
+        print("Splitting audio file into chunks...")
+        audio = AudioSegment.from_file(file_path)
+        
+        # Create temp directory
+        temp_dir = tempfile.mkdtemp(prefix="audio_chunks_")
+        print(f"Created temporary directory: {temp_dir}")
+        
+        # Split on silence with longer minimum silence length
+        chunks = split_on_silence(
+            audio,
+            min_silence_len=1000,  # Increased from 500 to 1000ms
+            silence_thresh=silence_thresh,
+            keep_silence=200  # Increased from 100 to 200ms
+        )
+        
+        # If no silence found or too many chunks, split into fixed length chunks
+        if not chunks or len(chunks) > 10:  # Limit to 10 chunks max
+            print("Using fixed-length chunks for better quality...")
+            chunks = [audio[i:i + chunk_length_ms] for i in range(0, len(audio), chunk_length_ms)]
+        
+        # Save chunks
+        chunk_files = []
+        for i, chunk in enumerate(chunks):
+            chunk_file = os.path.join(temp_dir, f"chunk_{i}.wav")
+            chunk.export(chunk_file, format="wav")
+            chunk_files.append(chunk_file)
+            print(f"Created chunk {i+1}/{len(chunks)} ({len(chunk)/1000:.1f}s)")
+        
+        return chunk_files, temp_dir
+    except Exception as e:
+        print(f"Error splitting audio file: {e}")
+        return None, None
+
+def process_audio_chunk(chunk_file, recognizer, max_retries=3):
+    """Process a single audio chunk."""
+    try:
+        with sr.AudioFile(chunk_file) as source:
+            audio = recognizer.record(source)
+        
+        for attempt in range(max_retries):
+            try:
+                print(f"Processing chunk (attempt {attempt + 1}/{max_retries})...")
+                text = recognizer.recognize_google(audio, language='ru-RU')
+                return text
+            except sr.UnknownValueError:
+                print("Could not understand audio in this chunk.")
+                return None
+            except sr.RequestError as e:
+                print(f"Error with the speech recognition service: {e}")
+                if attempt < max_retries - 1:
+                    time.sleep(2)
+                else:
+                    return None
+    except Exception as e:
+        print(f"Error processing chunk: {e}")
         return None
 
 def list_audio_files():
@@ -61,65 +124,76 @@ def list_audio_files():
         except ValueError:
             print("Please enter a valid number.")
 
-def convert_audio_to_text(audio_file_path=None, max_retries=3):
+def convert_audio_to_text(audio_file_path=None):
     # Initialize recognizer
     recognizer = sr.Recognizer()
+    temp_dir = None
     
     try:
         if audio_file_path:
             # Check file size
             file_size_mb = os.path.getsize(audio_file_path) / (1024 * 1024)
             if file_size_mb > 10:  # Google's limit is around 10MB
-                print(f"Warning: File size ({file_size_mb:.1f} MB) is large. Consider using a shorter audio clip.")
+                print(f"File size ({file_size_mb:.1f} MB) is large. Splitting into chunks...")
+                chunk_files, temp_dir = split_audio_file(audio_file_path)
+                if not chunk_files:
+                    print("Failed to split audio file.")
+                    return
+                
+                print(f"\nProcessing {len(chunk_files)} chunks...")
+                full_text = []
+                for i, chunk_file in enumerate(chunk_files, 1):
+                    print(f"\nProcessing chunk {i}/{len(chunk_files)}")
+                    text = process_audio_chunk(chunk_file, recognizer)
+                    if text:
+                        full_text.append(text)
+                        print(f"Successfully transcribed chunk {i}")
+                    else:
+                        print(f"Failed to transcribe chunk {i}")
+                
+                if full_text:
+                    print("\nFull Transcription:")
+                    print("\n".join(full_text))
+                else:
+                    print("No text could be transcribed from any chunks.")
+                return
             
-            # Check duration
-            duration = get_audio_duration(audio_file_path)
-            if duration and duration > 60:  # Google's limit is around 1 minute
-                print(f"Warning: Audio duration ({duration:.1f} seconds) is long. Consider using a shorter clip.")
-            
-            # If audio file is provided, read from file
+            # For smaller files, process directly
             with sr.AudioFile(audio_file_path) as source:
                 print("Reading audio file...")
                 audio = recognizer.record(source)
+            
+            print("Processing...")
+            text = recognizer.recognize_google(audio, language='ru-RU')
+            print("\nTranscription:")
+            print(text)
+            
         else:
             # Use microphone input
             with sr.Microphone() as source:
                 print("Listening... Speak in Russian")
-                # Adjust for ambient noise
                 recognizer.adjust_for_ambient_noise(source, duration=1)
                 audio = recognizer.listen(source)
-        
-        # Try recognition with retries
-        for attempt in range(max_retries):
-            try:
-                print(f"Processing (attempt {attempt + 1}/{max_retries})...")
-                text = recognizer.recognize_google(audio, language='ru-RU')
-                print("\nTranscription:")
-                print(text)
-                return text
-            except sr.UnknownValueError:
-                print("Could not understand audio. Please try again.")
-                if attempt < max_retries - 1:
-                    time.sleep(1)  # Wait before retrying
-                else:
-                    print("Maximum retries reached. Please check your audio quality.")
-            except sr.RequestError as e:
-                print(f"Error with the speech recognition service: {e}")
-                if attempt < max_retries - 1:
-                    print("Retrying...")
-                    time.sleep(2)  # Wait longer before retrying
-                else:
-                    print("Maximum retries reached. Please check your internet connection.")
-            except Exception as e:
-                print(f"An unexpected error occurred: {e}")
-                if attempt < max_retries - 1:
-                    print("Retrying...")
-                    time.sleep(1)
-                else:
-                    print("Maximum retries reached. Please try again later.")
-        
+            
+            print("Processing...")
+            text = recognizer.recognize_google(audio, language='ru-RU')
+            print("\nTranscription:")
+            print(text)
+            
+    except sr.UnknownValueError:
+        print("Could not understand audio")
+    except sr.RequestError as e:
+        print(f"Error with the speech recognition service: {e}")
     except Exception as e:
-        print(f"An error occurred while processing the audio: {e}")
+        print(f"An error occurred: {e}")
+    finally:
+        # Clean up temp directory
+        if temp_dir and os.path.exists(temp_dir):
+            try:
+                shutil.rmtree(temp_dir)
+                print(f"\nCleaned up temporary directory: {temp_dir}")
+            except Exception as e:
+                print(f"Warning: Could not clean up temporary directory: {e}")
 
 if __name__ == "__main__":
     print("Russian Audio to Text Converter")
