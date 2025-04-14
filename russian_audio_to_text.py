@@ -6,6 +6,7 @@ import time
 import shutil
 from pydub import AudioSegment
 from pydub.silence import split_on_silence
+from googletrans import Translator
 
 def get_audio_duration(file_path):
     """Get the duration of an audio file in seconds."""
@@ -22,6 +23,16 @@ def get_audio_duration(file_path):
             return len(audio) / 1000.0  # Convert milliseconds to seconds
     except Exception as e:
         print(f"Warning: Could not determine audio duration: {e}")
+        return None
+
+def translate_text(text, target_lang='en'):
+    """Translate text to the target language using Google Translate."""
+    try:
+        translator = Translator()
+        translation = translator.translate(text, src='ru', dest=target_lang)
+        return translation.text
+    except Exception as e:
+        print(f"Translation error: {e}")
         return None
 
 def split_audio_file(file_path, chunk_length_ms=120000, silence_thresh=-40):
@@ -126,7 +137,7 @@ def list_audio_files():
         except ValueError:
             print("Please enter a valid number.")
 
-def convert_audio_to_text(audio_file_path=None):
+def convert_audio_to_text(audio_file_path=None, translate=False):
     # Initialize recognizer
     recognizer = sr.Recognizer()
     temp_dir = None
@@ -155,7 +166,15 @@ def convert_audio_to_text(audio_file_path=None):
                 
                 if full_text:
                     print("\nFull Transcription:")
-                    print("\n".join(full_text))
+                    final_text = "\n".join(full_text)
+                    print(final_text)
+                    
+                    if translate:
+                        print("\nTranslating to English...")
+                        translation = translate_text(final_text)
+                        if translation:
+                            print("\nEnglish Translation:")
+                            print(translation)
                 else:
                     print("No text could be transcribed from any chunks.")
                 return
@@ -170,6 +189,13 @@ def convert_audio_to_text(audio_file_path=None):
             print("\nTranscription:")
             print(text)
             
+            if translate:
+                print("\nTranslating to English...")
+                translation = translate_text(text)
+                if translation:
+                    print("\nEnglish Translation:")
+                    print(translation)
+            
         else:
             # Use microphone input
             with sr.Microphone() as source:
@@ -181,6 +207,13 @@ def convert_audio_to_text(audio_file_path=None):
             text = recognizer.recognize_google(audio, language='ru-RU')
             print("\nTranscription:")
             print(text)
+            
+            if translate:
+                print("\nTranslating to English...")
+                translation = translate_text(text)
+                if translation:
+                    print("\nEnglish Translation:")
+                    print(translation)
             
     except sr.UnknownValueError:
         print("Could not understand audio")
@@ -204,13 +237,15 @@ if __name__ == "__main__":
     
     choice = input("\nEnter your choice (1 or 2): ")
     
-    if choice == "1":
-        convert_audio_to_text()
-    elif choice == "2":
-        file_path = list_audio_files()
-        if file_path and os.path.exists(file_path):
-            convert_audio_to_text(file_path)
+    if choice in ["1", "2"]:
+        translate = input("Do you want to translate the text to English? (y/n): ").lower() == 'y'
+        if choice == "1":
+            convert_audio_to_text(translate=translate)
         else:
-            print("File not found!")
+            file_path = list_audio_files()
+            if file_path and os.path.exists(file_path):
+                convert_audio_to_text(file_path, translate=translate)
+            else:
+                print("File not found!")
     else:
         print("Invalid choice!") 
